@@ -138,19 +138,12 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
 
 CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:3000",
-    "http://localhost:3000",
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
+    "https://api.farmspt.ai.edvsz.hs-osnabrueck.de",
 ]
 
-# CSRF for same-origin
 CSRF_TRUSTED_ORIGINS = [
-"http://127.0.0.1:8000",
-"http://localhost:8000",
-"http://0.0.0.0:8000",
+    "https://api.farmspt.ai.edvsz.hs-osnabrueck.de",
 ]
 
-CSRF_COOKIE_SECURE = False  # nur für Development!
-CSRF_COOKIE_HTTPONLY = False  # erlaubt JS zugriff auf Cookie
-CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
