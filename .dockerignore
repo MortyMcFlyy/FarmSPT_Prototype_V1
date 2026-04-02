@@ -1,0 +1,6 @@
+farmspt_venv
+pycache
+*.pyc
+.git
+.vscode
+.idea
