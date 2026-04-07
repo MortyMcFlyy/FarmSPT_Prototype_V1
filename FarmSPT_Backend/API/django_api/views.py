@@ -72,7 +72,7 @@ class FieldBoundaryViewSet(viewsets.ModelViewSet):
     """
     queryset = FieldBoundary.objects.all()
     serializer_class = FieldBoundarySerializer
-    permission_classes = [permissions.AllowAny]  # TODO: Set to IsAuthenticated for production
+    permission_classes = [permissions.AllowAny]
     parser_classes = (MultiPartParser, FormParser)
 
     @action(
@@ -125,6 +125,37 @@ class FieldBoundaryViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=['get'], url_path='edc-metadata')
+    def edc_metadata(self, request, pk=None):
+        """
+        Gibt das Feld mit EDC-Katalog-Formattierung zurück
+        GET /fieldboundaries/{id}/edc-metadata/
+        """
+        field = self.get_object()
+        traces = ABTrace.objects.filter(field=field)
+        
+        data = {
+            'asset_id': str(field.id),
+            'asset_name': field.name,
+            'description': f'Feld: {field.name}',
+            'area_hectares': field.area_hectares,
+            'coordinate_count': len(field.coordinates),
+            'coordinates': field.coordinates,
+            'created_at': field.created_at.isoformat(),
+            'updated_at': field.updated_at.isoformat(),
+            'traces_count': traces.count(),
+            'traces': [
+                {
+                    'trace_id': str(t.id),
+                    'name': t.trace_data.get('name', 'Unknown'),
+                    'distance_km': t.distance_km,
+                    'created_at': t.created_at.isoformat(),
+                }
+                for t in traces
+            ]
+        }
+        return Response(data)
 
 
 class ABTraceViewSet(viewsets.ModelViewSet):
