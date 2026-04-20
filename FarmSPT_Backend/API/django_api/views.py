@@ -115,6 +115,28 @@ class FieldBoundaryViewSet(viewsets.ModelViewSet):
             area_hectares=area_hectares,
         )
 
+        # ✅ ZUSÄTZLICH: AB-Spuren importieren
+        traces_imported = 0
+        try:
+            for ggp in pfd.findall(".//GGP"):
+                ggp_name = (ggp.get("B") or "").strip()
+                for gpn in ggp.findall("./GPN"):
+                    gpn_type = gpn.get("B", "")
+                    if gpn_type.lower() != "singletrack":
+                        continue
+                    for lsg in gpn.findall("./LSG"):
+                        points = _parse_points_from_lsg(lsg)
+                        if points:  # Nur speichern wenn Punkte vorhanden
+                            ABTrace.objects.create(
+                                field=field,
+                                trace_data={"name": ggp_name, "points": points},
+                                distance_km=_distance_km(points),
+                            )
+                            traces_imported += 1
+        except Exception as e:
+            # Fehler bei Spurenimport loggen, aber nicht Feldimport abbrechen
+            print(f"Fehler beim Spurenimport: {e}")
+
         return Response(
             {
                 "status": "success",
@@ -122,6 +144,7 @@ class FieldBoundaryViewSet(viewsets.ModelViewSet):
                 "name": field.name,
                 "points": len(coordinates),
                 "area_hectares": field.area_hectares,
+                "traces_imported": traces_imported,  # ✅ Neu
             },
             status=status.HTTP_201_CREATED,
         )
@@ -189,6 +212,9 @@ class ABTraceViewSet(viewsets.ModelViewSet):
         except FieldBoundary.DoesNotExist:
             return Response({"error": "Feldgrenze nicht gefunden."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Alte Spuren für das Feld löschen!
+        ABTrace.objects.filter(field=field).delete()
+
         try:
             root = ET.parse(xml_file).getroot()
         except ET.ParseError as e:
@@ -199,17 +225,20 @@ class ABTraceViewSet(viewsets.ModelViewSet):
             return Response({"error": "Kein PFD-Element gefunden."}, status=status.HTTP_400_BAD_REQUEST)
 
         imported = 0
-        for lsg in pfd.findall("./LSG"):
-            name = (lsg.get("B") or "").strip()
-            if not name.lower().startswith("a-b"):
-                continue
-
-            points = _parse_points_from_lsg(lsg)
-            ABTrace.objects.create(
-                field=field,
-                trace_data={"name": name, "points": points},
-                distance_km=_distance_km(points),
-            )
-            imported += 1
+        for ggp in pfd.findall(".//GGP"):
+            ggp_name = (ggp.get("B") or "").strip()
+            for gpn in ggp.findall("./GPN"):
+                gpn_type = gpn.get("B", "")
+                if gpn_type.lower() != "singletrack":
+                    continue
+                for lsg in gpn.findall("./LSG"):
+                    points = _parse_points_from_lsg(lsg)
+                    if points:
+                        ABTrace.objects.create(
+                            field=field,
+                            trace_data={"name": ggp_name, "points": points},
+                            distance_km=_distance_km(points),
+                        )
+                        imported += 1
 
         return Response({"status": "success", "imported": imported}, status=status.HTTP_201_CREATED)
