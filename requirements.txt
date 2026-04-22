@@ -6,3 +6,4 @@ gunicorn==23.0.0
 whitenoise==6.8.2
 psycopg2-binary==2.9.11
 python-dotenv==1.0.0
+pycasbin==2.0.0

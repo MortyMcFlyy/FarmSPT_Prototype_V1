@@ -4,11 +4,15 @@ from rest_framework import permissions, viewsets, status
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAdminUser
 from API.django_api.serializers import ABTraceXMLUploadSerializer, FieldBoundaryXMLUploadSerializer, GroupSerializer, UserSerializer, FieldBoundarySerializer, ABTraceSerializer
 from API.django_api.models import FieldBoundary, ABTrace
 import xml.etree.ElementTree as ET
 import json
 from math import radians, sin, cos, sqrt, atan2
+from .models import Role, Policy
+from .serializers import RoleSerializer, PolicySerializer
+
 
 #helper method
 def _parse_points_from_lsg(lsg_element):
@@ -242,3 +246,17 @@ class ABTraceViewSet(viewsets.ModelViewSet):
                         imported += 1
 
         return Response({"status": "success", "imported": imported}, status=status.HTTP_201_CREATED)
+    
+
+
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+        queryset = Role.objects.all()
+        serializer_class = RoleSerializer
+        permission_classes = [IsAdminUser]
+
+class PolicyViewSet(viewsets.ModelViewSet):
+        queryset = Policy.objects.all()
+        serializer_class = PolicySerializer
+        permission_classes = [IsAdminUser]    
