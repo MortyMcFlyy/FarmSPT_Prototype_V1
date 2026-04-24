@@ -51,7 +51,46 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'API.django_api',
+    'mozilla_django_oidc',
 ]
+
+AUTHENTICATION_BACKENDS = [
+    'mozilla_django_oidc.auth.OIDCAuthenticationBackend',
+]
+
+# OIDC Configuration (mozilla-django-oidc):
+OIDC_RP_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID')
+OIDC_RP_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET')
+OIDC_RP_SIGN_ALGO = 'RS256'
+OIDC_RP_IDP_SIGN_KEY_ALG = 'RS256'  # Token Validierung
+OIDC_VERIFY_SSL = False  # Localhost hat kein SSL cert
+
+# WICHTIG: Discovery Endpoint
+OIDC_OP_DISCOVERY_ENDPOINT = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}/.well-known/openid-configuration"
+
+# OIDC Endpoints (mozilla-django-oidc braucht diese zusätzlich)
+OIDC_OP_AUTHORIZATION_ENDPOINT = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}/protocol/openid-connect/auth"
+OIDC_OP_TOKEN_ENDPOINT = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}/protocol/openid-connect/token"
+OIDC_OP_USER_ENDPOINT = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}/protocol/openid-connect/userinfo"
+OIDC_OP_JWKS_ENDPOINT = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}/protocol/openid-connect/certs"
+
+OIDC_RP_SCOPES = 'openid profile email'
+# Für interne Docker-Kommunikation (Backend → Keycloak)
+if os.getenv('DB_HOST') == 'db':  # Wir sind im Docker
+    KEYCLOAK_INTERNAL_URL = 'http://keycloak:8080'
+else:
+    KEYCLOAK_INTERNAL_URL = os.getenv('KEYCLOAK_URL')
+
+ #Token-Endpoints nutzen interne URL
+OIDC_OP_TOKEN_ENDPOINT = f"{KEYCLOAK_INTERNAL_URL}/realms/{os.getenv('KEYCLOAK_REALM')}/protocol/openid-connect/token"
+OIDC_OP_USER_ENDPOINT = f"{KEYCLOAK_INTERNAL_URL}/realms/{os.getenv('KEYCLOAK_REALM')}/protocol/openid-connect/userinfo"
+OIDC_OP_JWKS_ENDPOINT = f"{KEYCLOAK_INTERNAL_URL}/realms/{os.getenv('KEYCLOAK_REALM')}/protocol/openid-connect/certs"
+
+LOGIN_REDIRECT_URL = '/'
+
+
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
 
 MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -68,6 +107,9 @@ MIDDLEWARE = [
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
 }
 
 ROOT_URLCONF = 'API.urls'
@@ -147,12 +189,14 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
 
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://localhost:3000",
     "https://api.farmspt.ai.edvsz.hs-osnabrueck.de",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://localhost:8080",
     "https://api.farmspt.ai.edvsz.hs-osnabrueck.de",
 ]
 
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SECURE = True

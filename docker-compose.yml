@@ -12,6 +12,28 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: farmspt_keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/farmspt_db
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KC_HOSTNAME: localhost
+    ports:
+      - "8080:8080"
+    command: start-dev
+    depends_on:
+      - db
 
   backend:
     build:
@@ -28,8 +50,15 @@ services:
       - DB_PASSWORD=postgres
       - DB_HOST=db
       - DB_PORT=5432
+      - KEYCLOAK_URL=http://localhost:8080
+      - KEYCLOAK_REALM=FarmSPT_v1
+      - KEYCLOAK_CLIENT_ID=farmspt_v1-api
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
     depends_on:
-      - db
+       db:
+        condition: service_healthy
+       keycloak:
+        condition: service_started
 
 volumes:
   postgres_data:

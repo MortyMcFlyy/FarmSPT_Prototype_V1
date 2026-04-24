@@ -7,3 +7,5 @@ whitenoise==6.8.2
 psycopg2-binary==2.9.11
 python-dotenv==1.0.0
 pycasbin==2.0.0
+mozilla-django-oidc==5.0.2
+requests==2.33.1
