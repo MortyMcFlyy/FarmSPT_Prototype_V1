@@ -38,5 +38,6 @@ urlpatterns = [
     path('app/<path:path>', serve, {"document_root": FRONTEND_DIR}),
     # Nur root /app/ auf index.html
     path('app/', serve, {"path": "index.html", "document_root": FRONTEND_DIR}),
+    path('api/login/', views.token_login, name='token_login'),
     path('oidc/', include('mozilla_django_oidc.urls')),
 ]

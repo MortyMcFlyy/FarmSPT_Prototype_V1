@@ -12,6 +12,9 @@ import json
 from math import radians, sin, cos, sqrt, atan2
 from .models import Role, Policy
 from .serializers import RoleSerializer, PolicySerializer
+import requests
+import requests
+from django.conf import settings
 
 
 #helper method (made with claude )
@@ -76,7 +79,7 @@ class FieldBoundaryViewSet(viewsets.ModelViewSet):
     """
     queryset = FieldBoundary.objects.all()
     serializer_class = FieldBoundarySerializer
-    permission_classes = [permissions.AllowAny] #TODO Set to IsAuthenticated for production
+    permission_classes = [permissions.IsAuthenticated] #TODO Set to IsAuthenticated for production
     parser_classes = (MultiPartParser, FormParser)
 
     @action(
@@ -191,7 +194,7 @@ class ABTraceViewSet(viewsets.ModelViewSet):
     """
     queryset = ABTrace.objects.all()
     serializer_class = ABTraceSerializer
-    permission_classes = [permissions.AllowAny]  # TODO: Set to IsAuthenticated for production
+    permission_classes = [permissions.IsAuthenticated]  # TODO: Set to IsAuthenticated for production
     parser_classes = (MultiPartParser, FormParser)
 
     @action(
@@ -259,4 +262,65 @@ class RoleViewSet(viewsets.ModelViewSet):
 class PolicyViewSet(viewsets.ModelViewSet):
         queryset = Policy.objects.all()
         serializer_class = PolicySerializer
-        permission_classes = [IsAdminUser]    
+        permission_classes = [IsAdminUser]
+
+
+# API/django_api/views.py - neuer Endpoint
+
+
+@api_view(['POST'])
+def token_login(request):
+    """
+    Login mit Keycloak Credentials
+    
+    POST /api/login/
+    {
+        "username": "user@example.com",
+        "password": "password123"
+    }
+    
+    Response:
+    {
+        "access_token": "eyJhbGc...",
+        "token_type": "Bearer",
+        "expires_in": 300,
+        "refresh_token": "..."
+    }
+    """
+    username = request.data.get('username')
+    password = request.data.get('password')
+    
+    if not username or not password:
+        return Response(
+            {"error": "username and password required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Keycloak Token Endpoint
+        token_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/token"
+        
+        payload = {
+            'grant_type': 'password',
+            'client_id': settings.OIDC_RP_CLIENT_ID,
+            'client_secret': settings.OIDC_RP_CLIENT_SECRET,
+            'username': username,
+            'password': password,
+            'scope': 'openid profile email'
+        }
+        
+        response = requests.post(token_url, data=payload, verify=False)
+        
+        if response.status_code != 200:
+            return Response(
+                {"error": "Invalid credentials"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        return Response(response.json(), status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

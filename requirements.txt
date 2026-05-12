@@ -9,3 +9,4 @@ python-dotenv==1.0.0
 pycasbin==2.0.0
 mozilla-django-oidc==5.0.2
 requests==2.33.1
+PyJWT==2.12.1
