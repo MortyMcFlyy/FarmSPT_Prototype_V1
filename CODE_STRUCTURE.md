@@ -2,11 +2,20 @@
 
 ##  Dateistruktur
 
+### `docker-compose`
+- config for:
+- traefik
+- keycloak
+- postgres
+- backend
+
+
 ### `FarmSPT_Backend/API/settings.py`
 - Django Konfiguration
 - Keycloak/OIDC Setup
 - Datenbankverbindung PostgreSQL
 - CORS, Security Headers via Traefik
+- env data
 
 
 ### `FarmSPT_Backend/API/urls.py`
@@ -14,6 +23,8 @@
 - Registrierte ViewSets
 - Admin Interface
 - OIDC Endpoints
+- Token Endpoint
+- Create User(NSFP)
 
 ### `FarmSPT_Backend/API/django_api/models.py`
 **Datenbank-Schema:**
@@ -42,6 +53,10 @@
    - action: read, write, delete, admin, denied, custom, temporary
    - unique_together: Verhindert Duplikate
 
+
+
+
+
 ### `FarmSPT_Backend/API/django_api/views.py`
 **API Viewsets (Endpunkte):**
 
@@ -67,6 +82,12 @@
    - POST: Neue Spur
    - PATCH: Spur aktualisieren
 
+5. **create User**
+
+
+
+6. **Token**
+
 ### `FarmSPT_Backend/API/django_api/serializers.py`
 [Beschreibung der DRF Serializers]
 
@@ -85,6 +106,13 @@
 4. Django validiert Token gegen JWKS Endpoint
 5. User ist authentifiziert
 
+### Keycloak Token per Credentials
+### Flow:
+1. token endpoint mit User Credentials aufrufen
+2. token erhalten
+3. token zur auth bei endpunkten nutzen
+
+
 
 
 ##  Geplante Module
@@ -99,3 +127,5 @@
 
 ### FarmSPT_Transferlayer
 [ Platzhalter ]
+
+### etc. ###
