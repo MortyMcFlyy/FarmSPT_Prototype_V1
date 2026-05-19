@@ -12,6 +12,8 @@ import json
 from math import radians, sin, cos, sqrt, atan2
 from .models import Role, Policy
 from .serializers import RoleSerializer, PolicySerializer
+from keycloak import KeycloakAdmin
+from keycloak.exceptions import KeycloakGetError
 import requests
 import requests
 from django.conf import settings
@@ -54,6 +56,74 @@ def _distance_km(points):
         total += r * c
 
     return round(total, 4)
+
+
+
+#helper method for createing user in keycloak and adding to group (made with claude)
+def _add_user_to_manufacturers_group(user_id):
+    """
+    Helper-Methode: Fügt einen User zur 'Manufacturers' Gruppe hinzu
+    
+    Args:
+        user_id: Die Keycloak User ID
+        
+    Returns:
+        (bool, str) - (success, message)
+    """
+    try:
+        # Erst einen Admin-Token holen
+        token_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/token"
+        
+        token_response = requests.post(
+            token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": settings.KEYCLOAK_CLIENT_ID,
+                "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+            },
+            verify=False,
+        )
+        
+        if token_response.status_code != 200:
+            return False, "Keycloak admin token konnte nicht geholt werden"
+        
+        access_token = token_response.json()["access_token"]
+        
+        # Alle Gruppen abrufen
+        groups_url = f"{settings.KEYCLOAK_URL}/admin/realms/{settings.KEYCLOAK_REALM}/groups"
+        groups_response = requests.get(
+            groups_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            verify=False
+        )
+        
+        manufacturers_group = None
+        for group in groups_response.json():
+            if group['name'] == 'Manufacturers':
+                manufacturers_group = group
+                break
+        
+        if not manufacturers_group:
+            return False, "Manufacturers Gruppe existiert nicht in Keycloak"
+        
+        # User zur Gruppe hinzufügen
+        group_id = manufacturers_group['id']
+        add_url = f"{settings.KEYCLOAK_URL}/admin/realms/{settings.KEYCLOAK_REALM}/users/{user_id}/groups/{group_id}"
+        
+        add_response = requests.put(
+            add_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            verify=False
+        )
+        
+        if add_response.status_code not in [201, 204, 200]:
+            return False, f"User zu Gruppe hinzufügen fehlgeschlagen: {add_response.text}"
+        
+        return True, "User zu Manufacturers Gruppe hinzugefügt"
+        
+    except Exception as e:
+        print(f"Fehler beim Hinzufügen zur Gruppe: {e}")
+        return False, str(e)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -274,6 +344,7 @@ class PolicyViewSet(viewsets.ModelViewSet):
 def keycloak_create_manufacturer(request):
     """
     Erstellt einen neuen Manufacturer(User) in Keycloak
+    und fügt ihn automatisch zur 'Manufacturers' Gruppe hinzu
     
     POST /api/keycloak/manufacturers/
     
@@ -284,11 +355,6 @@ def keycloak_create_manufacturer(request):
         "password": "SecurePassword123!",
         "first_name": "John",
         "last_name": "Doe"
-    }
-    
-    Response bei Erfolg (201):
-    {
-        "status": "created"
     }
     """
     username = request.data.get("username")
@@ -303,59 +369,61 @@ def keycloak_create_manufacturer(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    token_url = f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/token"
-    admin_url = f"{settings.KEYCLOAK_URL}/admin/realms/{settings.KEYCLOAK_REALM}/users"
-
-    token_response = requests.post(
-        token_url,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": settings.KEYCLOAK_CLIENT_ID,
-            "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
-        },
-        verify=False,
-    )
-
-    if token_response.status_code != 200:
+    try: #TODO: not safe for production!!!
+        keycloak_admin = KeycloakAdmin(
+            server_url=settings.KEYCLOAK_URL,
+            client_id=settings.KEYCLOAK_CLIENT_ID,
+            client_secret_key=settings.KEYCLOAK_CLIENT_SECRET,  
+            realm_name=settings.KEYCLOAK_REALM,
+            verify=False
+)
+        # User erstellen
+        user_data = {
+            "username": username,
+            "email": email,
+            "firstName": first_name,
+            "lastName": last_name,
+            "enabled": True,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": password,
+                    "temporary": False
+                }
+            ],
+        }
+        
+        user_id = keycloak_admin.create_user(user_data)
+        
+        #  User zur Manufacturers Gruppe hinzufügen
+        success, message = _add_user_to_manufacturers_group(user_id)
+        
+        if not success:
+            return Response(
+                {"error": f"User erstellt, aber Gruppenzuweisung fehlgeschlagen: {message}"},
+                status=status.HTTP_201_CREATED  # User wurde trotzdem erstellt
+            )
+        
         return Response(
-            {"error": "Could not authenticate with Keycloak service account"},
-            status=status.HTTP_502_BAD_GATEWAY
-        )
-
-    access_token = token_response.json()["access_token"]
-
-    payload = {
-        "username": username,
-        "email": email,
-        "firstName": first_name,
-        "lastName": last_name,
-        "enabled": True,
-        "credentials": [
             {
-                "type": "password",
-                "value": password,
-                "temporary": False
-            }
-        ],
-    }
-
-    create_response = requests.post(
-        admin_url,
-        json=payload,
-        headers={"Authorization": f"Bearer {access_token}"},
-        verify=False,
-    )
-
-    if create_response.status_code not in [201, 204]:
+                "status": "created",
+                "user_id": user_id,
+                "message": message
+            },
+            status=status.HTTP_201_CREATED
+        )
+        
+    except KeycloakGetError as e:
         return Response(
-            {"error": "Keycloak user creation failed", "details": create_response.text},
+            {"error": f"Keycloak user creation failed: {e}"},
             status=status.HTTP_502_BAD_GATEWAY
         )
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
-    return Response(
-        {"status": "created"},
-        status=status.HTTP_201_CREATED
-    )
 
 @api_view(['POST'])
 def token_login(request):
@@ -404,7 +472,7 @@ def token_login(request):
         # JWT dekodieren (ohne Signatur-Validierung für dev/local)
         decoded_token = jwt.decode(access_token, options={"verify_signature": False})
         
-        # ✅ Zugriff überprüfen MIT JWT-Daten
+        # Zugriff überprüfen MIT JWT-Daten
         is_allowed, error_message = _check_user_access_allowed_from_jwt(decoded_token)
         
         if not is_allowed:
